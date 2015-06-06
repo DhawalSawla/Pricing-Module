@@ -1,0 +1,374 @@
+package com.bankofamerica.gwim.bw;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+public class ThomsonSocket1 implements ThomsonConstants1
+{
+  private static ByteBuffer buffer;
+  private int seqNo  = 0;
+  private Socket socket  = null;
+  private boolean loggedIn  = false;
+  private String buf_error  = null;
+
+   public static Socket thomsonSocket;
+   public static Socket thomsonStreamer;
+   static byte SYNCH = 0x02;
+   static byte sess_id[];
+   static int seq_number = 0;
+   static byte response[];
+   static byte twoByteShortArray[] = {(byte)(0 >>> 8), (byte)0};  static int bufSize = 4096;
+//  static int numRead;
+
+  static int recRecLen;
+  static int avalBytesToRead;
+  static long sleep_time = 100;
+
+  public ThomsonSocket1(Socket inSocket)
+  {
+  socket  = inSocket;
+  }
+
+  ThomsonSocket1()
+  {}
+
+  public Socket getSocket()
+  {
+  return socket;
+  }
+
+  public void logon(String userName, String password) throws IOException
+  {
+  String s1="LOGON USERNAME=" + userName + " PASSWORD=" + password;
+  String s = new String(s1);
+  try {
+  sendRequest(LOGON_MSG_TYPE, new String(s1).getBytes());
+  } catch (InterruptedException ex) {
+  Logger.getLogger(ThomsonSocket1.class.getName()).log(Level.SEVERE, null, ex);
+  }
+  System.out.println();
+  System.out.println(s1);
+//  System.out.println("Response after converting tc-->"+hexString);
+  loggedIn  = true;
+  }
+
+  public void logoff() throws IOException
+  {
+  try {
+  System.out.println("Logoff...");
+  sendRequest(LOGOFF_MSG_TYPE, new String("LOGOFF").getBytes());
+  } catch (InterruptedException ex) {
+  Logger.getLogger(ThomsonSocket1.class.getName()).log(Level.SEVERE, null, ex);
+  }
+
+  loggedIn  = false;
+  }
+
+  public boolean isLoggedIn()
+  {
+  return loggedIn;
+  }
+
+//  synchronized(this){
+//  int numRead  = 0;
+//  int writeOffset  = 0;
+//  int expectedBytes  = 0;
+//  int loopcounter  = 0;
+//  boolean stopReading  = false;
+//  ThomsonConnection1.buf_error="";
+//
+//  while( (stopReading == false))
+//  {
+//  // && ((numRead = inStream.read(buf)) >= 0)
+//  System.out.println("Available Bytes: "+inStream.available());
+//  if(inStream.available()>0)
+//  {
+//  numRead = inStream.read(buf);
+//  if (expectedBytes == 0)
+//  {
+//  expectedBytes = toInt(buf[1], buf[2]);
+//  System.out.println("Expected Bytes: "+ expectedBytes);
+//  }
+//  baos.write(buf, writeOffset, numRead);
+//  writeOffset += numRead;
+//  System.out.println("Data Written: "+numRead+", Offset: "+ writeOffset);
+//
+//  if (writeOffset >= expectedBytes)
+//  {
+//  System.out.println("Stop Reading");
+//  Thread.sleep(sleep_time);
+//  sleep_time+=100;
+//  }
+//  }
+//  else
+//  {
+//
+//  }
+//  ThomsonConnection1.buf_error+=" Loop Start ";
+//
+//  System.out.println("Reading Data...");
+//
+//  if (writeOffset >= expectedBytes)
+//  {
+//  System.out.println("Stop Reading");
+//  Thread.sleep(sleep_time);
+//  sleep_time+=100;
+//  }
+//  if(sleep_time>1000)
+//  stopReading = true;
+//  loopcounter+=1;
+//  ThomsonConnection1.buf_error+=" Loopcounter: "+ loopcounter + ", Expected Bytes: "+ expectedBytes + ", Data Written: "+numRead+", Offset: "+ writeOffset + ", stopReading: " + stopReading + " Loop End " + "\n";
+//  }
+//  }
+//  }
+//  catch(Exception e)
+//  {
+//  ThomsonConnection1.no_of_read_bytes=" ReadCount1: " + (ThomsonConnection1.read_counter);
+//  System.out.println("Exception while Sending the Object-->"+ e);
+//  ThomsonConnection1.buf_error=e.toString();
+//  }
+//  return baos.toByteArray();
+//  }
+
+//   public static byte[] readSocket() throws IOException
+//  {
+//     //--------------------------------------------------------------------------------//
+//     // Receive data from Thomson.  This is a socket read, it returns pieces of the
+//     // record.
+//     //--------------------------------------------------------------------------------//
+//     byte buf[] = new byte[bufSize];
+//     numRead = 0;
+//  while(numRead == 0)
+//  {
+//  System.out.println(" Reading Socket...");
+//  // Only read to the size of the bufSize; it is the record header size on new
+//  // records (the first read of a record) and the record size for subsequent reads
+//     try{
+//  System.out.println("Buf length-->"+ buf.length+", "+ bufSize +", inStream-->"+ inStream);
+//  numRead = inStream.read(buf, 0, bufSize);
+//  }
+//  catch(Exception e)
+//  {
+//  System.out.println("Exception while reading header: "+e);
+//  }
+//  // The InputStream.read returns -1 if there is nothing left to read.
+//  // If nothing is in the buffer get out
+//  if( numRead < 0 ) break;
+//
+//  if (numRead >= bufSize)
+//  {
+//  System.out.println("numRead: "+ numRead + " >= bufSize: "+ bufSize);
+//     baos.write(buf, 0, bufSize);
+//     bufSize = 0;
+//  }
+//  else
+//  {
+//  System.out.println("numRead: "+ numRead + " < bufSize: "+ bufSize);
+//     baos.write(buf, 0, numRead);
+//     bufSize = bufSize - numRead;
+//  }
+//  }
+//  return baos.toByteArray();
+//  }
+
+  //original version
+  /*
+  * The main logic is written in this method.
+  * This method sends the request to the Thomson server, recieves the response from the Thomson server and returns it to tibco
+  * */
+  public byte[] sendRequest(byte reqType, byte reqBytes[]) throws IOException, InterruptedException
+  {
+  // Allocate the output buffer
+  System.out.println("***********Send Request**********");
+  byte[] sendBuf = formatRequest(reqType, reqBytes);
+  //System.out.println("After formatting-->"+ sendBuf);
+  // System.out.println("sendBuf length written to socket-->"+ sendBuf.length);
+  ThomsonConnection1.buf_error=" ";
+  ThomsonConnection1.no_of_read_bytes="";
+  ByteArrayOutputStream baos  = new ByteArrayOutputStream();
+
+  byte buf[]=null;
+  //byte buf_temp[]=null;
+  OutputStream outStream=null;
+  InputStream inStream=null;
+
+  int numRead  = 0;
+  //int prev_count  = 0;
+  int writeOffset  = 0;
+  int expectedBytes  = 0;
+  int loopcounter  = 0;
+  // boolean stopReading  = false;
+  ThomsonConnection1.buf_error="";
+  long var2=0, var3=0;
+  int available_bytes=0;
+
+  try
+  {
+  //socket.setSoTimeout(300);
+  outStream  = socket.getOutputStream();
+  inStream  = socket.getInputStream();
+  // Write the data
+  outStream.write(sendBuf, 0, sendBuf.length);
+
+  // Write the delimiter
+  outStream.write(DELIMITER, 0, DELIMITER.length);
+
+  // Receive the reply from Thomson
+  //buf  = new byte[4096];
+  buf  = new byte[8192];
+
+  //buf_temp  = new byte[16384];
+
+  System.out.println("inStream-->"+inStream);
+
+  //byte buf[]  = new byte[16384];
+  //byte buf[]  = new byte[32768];
+  //byte buf[]  = new byte[65536];
+  //buf  = new byte[131072];
+  ThomsonConnection1.read_counter=0;
+
+//  original Nochum's code
+//  while((numRead = inStream.read(buf)) != 0)
+//  {
+//  System.out.println("Entered loop, numRead: "+numRead);
+//  if (numRead > 0) {
+//  baos.write(buf, writeOffset, numRead);
+//  System.out.println("Data Written");
+//  writeOffset += numRead;
+//  ThomsonConnection1.read_counter++;
+//  //System.out.println("Increment Counter-->"+ThomsonConnection1.read_counter);
+//  }
+//  }
+//  System.out.println("Loop End");
+//  ThomsonConnection1.no_of_read_bytes=writeOffset+" ReadCount: "+ (ThomsonConnection1.read_counter);
+  System.out.println("Reading Data...");
+
+  long var1=System.currentTimeMillis();
+  loopcounter=0;
+  numRead=inStream.read(buf);
+  baos.write(buf, writeOffset, numRead);
+  expectedBytes = toInt(buf[1], buf[2]);
+  System.out.println("Expected Bytes: "+ expectedBytes);
+  System.out.println("numRead: "+ numRead);
+  while(expectedBytes>numRead && inStream.available()==0)
+  {
+  writeOffset=writeOffset+numRead;
+  System.out.println("In while loop writeOffset value :" + writeOffset);
+  numRead=inStream.read(buf);
+  baos.write(buf, writeOffset, numRead);
+  numRead=writeOffset+numRead;
+  System.out.println("In while loop numRead value:" +numRead);
+  }
+  var2=System.currentTimeMillis();
+  /*while((available_bytes=inStream.available())==0)
+  {
+  loopcounter+=1;
+  }
+   
+  numRead=inStream.read(buf);*/
+  ThomsonConnection1.buf_error+=" Available Data to read: "+ inStream.available()+", NumRead: "+ numRead+", Time consumed in while loop: "+ (var2-var1)+ ", loopcounter: "+loopcounter;
+  //System.out.println("Available Data to read: "+ inStream.available()+", NumRead: "+ numRead+", Time consumed in while loop: "+ (var2-var1));
+//  try{
+//  buf=new byte[numRead];
+//  }
+//  catch(Exception e)
+//  {
+//  System.out.println("Exception while redifing size of buf: "+ e);
+//  }
+//  var2=System.currentTimeMillis();
+//  var3=var2-var1;
+
+  /* if (numRead > 0) {
+  if (expectedBytes == 0)
+  {
+  expectedBytes = toInt(buf[1], buf[2]);
+  System.out.println("Expected Bytes: "+ expectedBytes);
+  }
+  baos.write(buf, writeOffset, numRead);
+  }*/
+
+  ThomsonConnection1.buf_error+=" Loopcounter: "+ loopcounter + ", Expected Bytes: "+ expectedBytes + ", Data Written: "+numRead+", Offset: "+ writeOffset + ", Time to read: " + var3 +  ", Available Bytes: " + inStream.available() + "\n";
+  ThomsonConnection1.buf_error+=" Baos Size: "+baos.size();
+  }
+  catch(Exception e)
+  {
+  ThomsonConnection1.buf_error+="Expected Bytes: "+ expectedBytes + ", Data Written: "+numRead+", Offset: "+ writeOffset + ", Time to read: " + var3 +  ", Available Bytes: " + inStream.available() + " ReadCount1: " + (ThomsonConnection1.read_counter) + "\n";
+//  ThomsonConnection1.no_of_read_bytes=" ReadCount1: " + (ThomsonConnection1.read_counter);
+//  System.out.println("Exception while Sending the Object-->"+ e);
+  ThomsonConnection1.buf_error=e.toString();
+  }
+
+  return baos.toByteArray();
+  }
+/*
+ * It extracts the first two bytes of response i.e it helps us to know the expected number of bytes of response
+ * */
+  public static int toInt(byte hb, byte lb)
+  {
+  System.out.println("After conversion");
+  System.out.println("hb: "+ ((int)hb << 8));
+  System.out.println("lb: "+ ((int)lb & 0xFF));
+  return ((int)hb << 8) | ((int)lb & 0xFF);
+  }
+/*
+ * This method is used to format the request i.e to add the header before sending it to the Thomson server
+ * */
+
+  private byte[] formatRequest(byte reqType, byte reqBytes[])
+  {
+  System.out.println("***********Format Request**********");
+  byte[] sendBuf = new byte[reqBytes.length + 13];
+
+  // Add the sync byte - position 0 for length of 1
+  sendBuf[0] = SYNC_BYTE;
+
+  // Add the buffer length - position 1 for length of 2
+  System.arraycopy(ByteBuffer.allocate(2).putShort((short) sendBuf.length).array(),
+  0, sendBuf, 1, 2);
+
+  // Add the data offset - position 3 for length of 1
+  sendBuf[3] = DATA_OFFSET;
+
+  // Add the request type - position 4 for length of 1
+  sendBuf[4] = reqType;
+
+  // Add the sequence number - position 5 for length of 4
+  System.arraycopy(ByteBuffer.allocate(4).putInt(++seqNo).array(),
+  0, sendBuf, 5, 4);
+
+  // Add the proto id - position 9 for length of 2
+  System.arraycopy(PROTO_ID, 0, sendBuf, 9, 2);
+
+  // Add the version id - position 11 for length of 2
+  System.arraycopy(VER_ID, 0, sendBuf, 11, 2);
+
+  // Add the request bytes - position 13 for length of the request
+  System.arraycopy(reqBytes, 0, sendBuf, 13, reqBytes.length);
+
+  return sendBuf;
+  }
+/*
+ * This method is for converting two consecutive bytes in the 'response' array that
+ * represents a big-endian short, and return the integer value.
+ * */
+   private static int get2byteIntBE(byte response[], int startByte)
+   {
+     //--------------------------------------------------------------------------------//
+     // This method is for converting two consecutive bytes in the 'response' array that
+     // represents a big-endian short, and return the integer value.
+     //--------------------------------------------------------------------------------//
+     System.arraycopy(response, startByte, twoByteShortArray, 0, 2);
+     buffer = ByteBuffer.wrap(twoByteShortArray);
+     //Session ID field is in big-endian
+     buffer.order(ByteOrder.BIG_ENDIAN);
+     return (int)buffer.getShort();
+   }
+
+}

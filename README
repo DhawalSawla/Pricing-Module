@@ -1,0 +1,5 @@
+Established synchronous communication to exchange data. Utilized the concept of Java Global Object Pool to maintain a list of authorized users to enable them to remain logged in for specific time interval.
+
+Implemented a multi-threaded approach to simultaneously convert and format the data in different threads coming from the server and display to the user.
+
+Delivered code at sub second response time (~50 millis) bringing at par with Mainframe jobs running on Z/OS. Developed efficient data structures to store the data.

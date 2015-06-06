@@ -1,0 +1,250 @@
+package com.bankofamerica.gwim.bw;
+
+import java.net.InetAddress;
+import java.net.Socket;
+import java.util.ArrayList;
+//import java.util.concurrent.locks.Lock;
+//import java.util.concurrent.locks.ReentrantLock;
+import org.apache.commons.pool.PoolableObjectFactory;
+
+public class ThomsonConnectionFactory1 implements PoolableObjectFactory<ThomsonSocket1>
+{
+  private String  qct_no  = null;
+  private String  hostName  = null;
+  private Integer  port  = new Integer(-1);
+  private String  userName  = null;
+  private String  password  = null;
+  private int  timeout  = 10000;
+  //private Lock lock=new ReentrantLock();
+
+  public static ArrayList <ServerConfig> conn = new ArrayList<ServerConfig>();
+
+  public ThomsonConnectionFactory1()
+  {}
+
+  public ThomsonConnectionFactory1(String inqct_no, String inHostName, int inPort, String inUserName, String inPassword, int inTimeout)
+  {
+  qct_no  = inqct_no;
+  hostName  = inHostName;
+  port  = new Integer(inPort);
+  timeout  = inTimeout;
+  userName  = inUserName;
+  password  = inPassword;
+  System.out.println("...Initialized the parameters...");
+  }
+
+  @Override
+  /*
+  * Used for activating the object, it is implicitly called by makeObject() method
+  * */
+  public void activateObject(ThomsonSocket1 ts) throws Exception {
+  // This should be a no-op method.  Since we are not passivating
+  // objects upon return, there is no need to activate them.
+
+  System.out.println("***********activateObject**********");
+  }
+
+  @Override
+  /*
+  * Used to destroy the object i.e. to remove the object from pool
+  * 
+  * */
+  public synchronized void destroyObject(ThomsonSocket1 ts) throws Exception {
+
+  double var1=System.currentTimeMillis();
+  System.out.println("***********destroyObject**********");
+//  Thread.sleep(1000);
+  ServerConfig sc=new ServerConfig();
+//  boolean tryLock = lock.tryLock();
+  Socket s=ts.getSocket();
+  Object s1=(Object)s.getInetAddress();
+  String addr=s1.toString().substring(1);
+
+//  System.out.println("Socket Connection Status-->"+ts.isLoggedIn());
+//  System.out.println("Socket Connection Status-->"+ts.getSocket());
+  try
+  {
+  for(int i=0;i<conn.size();i++)
+  {
+  sc=conn.get(i);
+//  if(sc.getHostName().equalsIgnoreCase(addr))
+  if(sc.getObject()!=null && sc.getObject().equals(ts))
+  {
+//  System.out.println("Object =");
+  conn.set(i, new ServerConfig(sc.getQct_No(), sc.getHostName(), sc.getPort(), sc.getUserName(), sc.getPassword(), sc.getTimeout(), "I", 0, null));
+//  System.out.println("QCTNO-->"+sc.getQct_No());
+  ts.logoff();
+  ts.getSocket().close();
+  break;
+  }
+  }
+  }
+  catch(Exception e)
+  {
+  System.out.println("Exception in destroying the Object-->"+ e);
+  }
+  double var2=System.currentTimeMillis();
+  System.out.println("Destroy Object time-->"+(var2-var1));
+
+//  displayList();
+  }
+/*
+ * Used for creating the object in a pool , it firsts checks an idle connection present and
+ * if found, changes it's status to active and makes the object.
+ * */
+  @Override
+  public ThomsonSocket1 makeObject() throws Exception
+  {
+  // Create a new Thomson Connection
+  double var1=System.currentTimeMillis();
+  System.out.println("***********makeObject**********");
+  ThomsonSocket1 ts=null;
+  ServerConfig sc=new ServerConfig();
+
+  for(int i=0;i<conn.size();i++)
+  {
+  sc=conn.get(i);
+//  System.out.println("Inside for loop...counter-->"+i);
+  //Search for an idle connction and make thomson socket object
+  if(sc.getStatus().equalsIgnoreCase("I"))
+  {
+//  System.out.println("I");
+  InetAddress inetaddress = InetAddress.getByName(sc.getHostName());//hostName
+  Socket socket = new Socket(inetaddress, sc.getPort());//port
+  socket.setSoTimeout(sc.getTimeout());//timeout
+  ts = new ThomsonSocket1(socket);
+  //After object is created,follows tcp/ip protocol i.e. first logs on to the server
+  ts.logon(sc.getUserName(), sc.getPassword());
+  conn.set(i, new ServerConfig(sc.getQct_No(), sc.getHostName(), sc.getPort(), sc.getUserName(), sc.getPassword(), sc.getTimeout(), "A", 1, ts));
+  System.out.println(i + " Object Active with hostname: "+ sc.getHostName()+", Timeout: "+sc.getTimeout());
+  break;
+  }
+  }
+  double var2=System.currentTimeMillis();
+  System.out.println("makeObject time-->"+(var2-var1));
+  return ts;
+  }
+
+  /*
+  * This should be a no-op method.  Otherwise it is
+  * invoked on every instance when it is returned to the pool.
+  * */
+  @Override
+  public void passivateObject(ThomsonSocket1 ts) throws Exception {
+  }
+
+  @Override
+  public boolean validateObject(ThomsonSocket1 ts) {
+  System.out.println("***********validateObject**********");
+  Socket socket=null;
+  try
+  {
+  socket = ts.getSocket();
+  }
+  catch(Exception e)
+  {
+  System.out.println("Exception in validate Object-->"+ e);
+  }
+
+  if (ts.isLoggedIn() &&
+  (socket.isConnected()) &&
+  !(socket.isInputShutdown()) &&
+  !(socket.isOutputShutdown()) )
+  return (true);
+  else
+  return (false);
+  }
+
+  /*
+  * It displays the server configuration list.
+  * */
+  public void displayList()
+  {
+  ServerConfig sc=new ServerConfig();
+  for(int i=0;i<conn.size();i++)//
+  {
+  sc=conn.get(i);
+  System.out.println(sc.getQct_No()+" "+sc.getHostName()+" "+sc.getUserName()
+  +" "+sc.getPassword()+" "+sc.getStatus()+" "+sc.getUsage()+" "+sc.getObject());
+  }
+  System.out.println();
+  }
+}
+
+/*
+ * This class contains the getter methods for the server configurations.
+ *
+ * */
+class ServerConfig
+{
+  private String  qct_no  = null;
+  private String  hostName  = null;
+  private Integer  port  = new Integer(-1);
+  private String  userName  = null;
+  private String  password  = null;
+  private int  timeout  = 0;
+  private String  status  = "I";
+  private int  usage  = 0;
+  private Object  conn_object = null;
+
+  public ServerConfig(String inqct_no)
+  {
+  qct_no = inqct_no;
+  }
+
+  public ServerConfig()
+  {}
+
+  public ServerConfig(String inqct_no, String inHostName, int inPort, String inUserName, String inPassword, int inTimeout, String instatus, int inusage, Object inconn_object)
+  {
+  System.out.println("...Entered ServerConfig constructor..."+ inqct_no+ " "+ inHostName+ " "+ inPort);
+  qct_no  = inqct_no;
+  hostName  = inHostName;
+  port  = new Integer(inPort);
+  timeout  = inTimeout;
+  userName  = inUserName;
+  password  = inPassword;
+  status  = instatus;
+  usage  = inusage;
+  conn_object = inconn_object;
+  }
+
+  public String getQct_No()
+  {
+  return qct_no;
+  }
+
+  public String getHostName()
+  {
+  return hostName;
+  }
+
+  public Integer getPort()
+  {
+  return port;
+  }
+  public String getUserName()
+  {
+  return userName;
+  }
+  public String getPassword()
+  {
+  return password;
+  }
+  public int getTimeout()
+  {
+  return timeout;
+  }
+  public String getStatus()
+  {
+  return status;
+  }
+  public int getUsage()
+  {
+  return usage;
+  }
+  public Object getObject()
+  {
+  return conn_object;
+  }
+}

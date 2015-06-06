@@ -1,0 +1,13 @@
+package com.bankofamerica.gwim.bw;
+
+public interface ThomsonConstants {
+   // Constants
+   public static final byte DELIMITER[] = new byte[]{0x00};
+   public static final byte SYNC_BYTE = 0x02;
+   public static final byte DATA_OFFSET = 0x0C;
+   public static final byte LOGON_MSG_TYPE = 0x4C;
+   public static final byte LOGOFF_MSG_TYPE = 0x43;
+   public static final byte DATA_MSG_TYPE = 0x51;
+   public static final byte PROTO_ID[] = {0x00,0x02};
+   public static final byte VER_ID[] = {0x00,0x01};
+}

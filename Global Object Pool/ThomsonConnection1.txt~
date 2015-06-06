@@ -1,0 +1,191 @@
+package com.bankofamerica.gwim.bw;
+
+import org.apache.commons.pool.impl.GenericObjectPool;
+
+public class ThomsonConnection implements ThomsonConstants
+{
+  private GenericObjectPool<ThomsonSocket> pool = null;
+  public static int timeout1=10000;
+  public static int conn_counter=0;
+  public static String buf_error=null;
+  public static String no_of_read_bytes=null;
+  public static int read_counter=0;
+
+  ThomsonConnectionFactory tcf = new ThomsonConnectionFactory();
+
+  public ThomsonConnection(String qct_no, String hostName, int port, String userName, String password, int timeout, int maxActive, int maxWait)
+  {
+  //Generic Object Pool is initialized here
+  pool = new GenericObjectPool<ThomsonSocket1>(new ThomsonConnectionFactory1(qct_no, hostName, port, userName, password, timeout),
+  maxActive,
+  GenericObjectPool.WHEN_EXHAUSTED_BLOCK,
+  maxWait,  // in milliseconds
+  true,    // testOnBorrow
+  false);    // testOnReturn
+   
+   
+  System.out.println("...Initialized the pool...");
+
+//  pool.setMinEvictableIdleTimeMillis(600000);
+//  pool.setTimeBetweenEvictionRunsMillis(10000);
+  }
+
+  public ThomsonConnection1()
+  {}
+
+  /* It borrows the object from the pool, sends the request, receives the response and returns it to tibco
+  * */
+  public byte[] ThomsonRequest(String reqString) throws Exception
+  {
+  // Get the socket
+  double var1=System.currentTimeMillis();
+  System.out.println("***********ThomsonRequest**********");
+  ThomsonSocket1 ts=null;
+  byte response[]=null;
+
+  try
+  {
+  //borrows/makes the object
+  ts = pool.borrowObject();
+
+  try
+  {
+  // Send the request
+  double var3=System.currentTimeMillis();
+
+  System.out.println("DATA_MSG_TYPE--> "+ DATA_MSG_TYPE+ ", ReqString-->"+ reqString);
+  //sends the request to thomson server and retrieves the response
+  response = ts.sendRequest(DATA_MSG_TYPE, reqString.getBytes());
+  double var4=System.currentTimeMillis();
+  System.out.println("Send Request time-->"+(var4-var3));
+  //returns the object to the pool after the request is served
+
+  pool.returnObject(ts);
+  }
+  catch(Exception e)
+  {
+  System.out.println("Exception while Sending Object-->"+ e);
+  }
+  }
+  catch(Exception ex)
+  {
+  System.out.println("Exception while borrowing the Object-->"+ex);
+  }
+  double var2=System.currentTimeMillis();
+  System.out.println("Thomson Request time in millis-->"+(var2-var1));
+  return response;
+  }
+
+  /* 
+  * Set the server info in ArrayList conn so that we can use it later to establish the connection
+  */
+  public String setServerInfo(String qct_no, String hostName, int port, String userName, String password) throws Exception
+  {
+  System.out.println("*****Set Server Info*****");
+  ServerConfig sc=new ServerConfig();
+  /*If Object is not found in the list, enter the if condition*/
+  if(!checkServerInfo(qct_no))
+  {
+  ThomsonConnectionFactory1.conn.add(new ServerConfig(qct_no, hostName, port, userName, password, timeout1, "I", 1, null));
+  System.out.println("Connection added, QCT No: "+qct_no);
+  }
+  sc=ThomsonConnectionFactory1.conn.get(conn_counter);
+  conn_counter+=1;
+  return (String) (sc.getQct_No()+" "+sc.getHostName()+" "+sc.getUserName()+" "+sc.getPassword()+" "+sc.getStatus()+" "+sc.getUsage()+" "+sc.getObject());
+  }
+
+  /*
+  *  returns true if object found in the list
+  */
+  public boolean checkServerInfo(String qct_no) throws Exception
+  {
+  System.out.println("*****Check Server Info*****");
+  boolean cond=false;
+  ServerConfig sc=new ServerConfig();
+
+  for(int i=0;i<ThomsonConnectionFactory1.conn.size();i++)
+  {
+  sc=ThomsonConnectionFactory1.conn.get(i);
+
+  if(sc.getQct_No().equalsIgnoreCase(qct_no))
+  {
+  /*If found, then mark its indicator as 1*/
+  cond=true;
+  ThomsonConnectionFactory1.conn.set(i, new ServerConfig(sc.getQct_No(), sc.getHostName(), sc.getPort(), sc.getUserName(), sc.getPassword(), sc.getTimeout(), sc.getStatus(), 1, sc.getObject()));
+  break;
+  }
+  }
+  return cond;
+  }
+
+  /*
+  *  Remove the object from the conn object as its usage is '0' and status is 'A'
+  * */
+  public void removeServerInfo() throws Exception
+  {
+  System.out.println("*****Remove Server Info*****");
+  ThomsonConnectionFactory1 tcf1 = new ThomsonConnectionFactory1();
+  ServerConfig sc=new ServerConfig();
+
+  for(int i=0;i<ThomsonConnectionFactory1.conn.size();i++)
+  {
+  sc=ThomsonConnectionFactory1.conn.get(i);
+
+  if(sc.getUsage() == 0)
+  {
+  /*Before removing, destroy its object from the pool*/
+  if(sc.getStatus().equalsIgnoreCase("A"))
+  {
+  try
+  {
+  System.out.println("Connection "+i+" removed, QCT No: "+sc.getQct_No());
+  tcf1.destroyObject((ThomsonSocket1) sc.getObject());
+  }
+  catch(Exception e)
+  {
+  System.out.println("Exception while destroying Object-->"+ e);
+  }
+  }
+  sc=ThomsonConnectionFactory1.conn.remove(i);
+  i-=1;
+  }
+  }
+  }
+/*
+ * Resets all the existing connections i.e. usage parameter is set to 0
+ * */
+  public void resetConnectionList() throws Exception
+  {
+  conn_counter=0;
+  ServerConfig sc=new ServerConfig();
+  for(int i=0;i<ThomsonConnectionFactory1.conn.size();i++)
+  {
+  sc=ThomsonConnectionFactory1.conn.get(i);
+  ThomsonConnectionFactory1.conn.set(i, new ServerConfig(sc.getQct_No(), sc.getHostName(), sc.getPort(), sc.getUserName(), sc.getPassword(), sc.getTimeout(), sc.getStatus(), 0, sc.getObject()));
+  System.out.println("Connection "+i+" reset, QCT No: "+sc.getQct_No());
+  }
+  System.out.println("Connections Reset...Displaying List...");
+  tcf.displayList();
+  }
+/*
+ * Makes all the connections inactive i.e. sets the status parameter to 'I'
+ * */
+  public void makeConnectionsInactive() throws Exception
+  {
+  ServerConfig sc=new ServerConfig();
+  for(int i=0;i<ThomsonConnectionFactory1.conn.size();i++)
+  {
+  sc=ThomsonConnectionFactory1.conn.get(i);
+  ThomsonConnectionFactory1.conn.set(i, new ServerConfig(sc.getQct_No(), sc.getHostName(), sc.getPort(), sc.getUserName(), sc.getPassword(), sc.getTimeout(), "I", 1, null));
+  }
+  System.out.println("Connections Reset...Displaying List...");
+  tcf.displayList();
+  }
+/*
+ * Returns all the errors/exceptions to the tibco
+ * */
+  public String getBufError()
+  {
+  return "Error:" + buf_error+" Bytes Read: " +no_of_read_bytes;
+  }
+}
